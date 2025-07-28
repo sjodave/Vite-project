@@ -1,0 +1,21 @@
+[
+  {
+    "name": "public",
+    "type": "folder",
+    "id": 1,
+    "children": [{ "name": "new", "type": "file", "id": 2 }]
+  },
+  {
+    "name": "src",
+    "type": "folder",
+    "id": 3,
+    "children": [
+      { "name": "components", "type": "folder", "id": 4, "children": [] }
+    ]
+  },
+  {
+    "name": "package.json",
+    "type": "file",
+    "id": 5
+  }
+]
