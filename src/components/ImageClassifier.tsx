@@ -115,7 +115,6 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
 
     const normalImages: File[] = []
     const theftImages: File[] = []
-    const unidentifiedImages: File[] = []
     const processedImages: Array<{
       file: File
       classification: string
@@ -148,17 +147,11 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
         const confidence = maxProbability
         const timestamp = Date.now()
 
-        // Categorize image based on confidence threshold (100% = 1.0)
-        if (confidence >= 1.0) {
-          // 100% confidence - move to normal or theft
-          if (classification.toLowerCase() === 'normal') {
-            normalImages.push(image)
-          } else {
-            theftImages.push(image)
-          }
-        } else {
-          // Less than 100% confidence - move to unidentified
-          unidentifiedImages.push(image)
+        // Categorize image based only on classification (ignore confidence)
+        if (classification.toLowerCase() === 'normal') {
+          normalImages.push(image)
+        } else if (classification.toLowerCase() === 'theft') {
+          theftImages.push(image)
         }
 
         processedImages.push({
@@ -177,45 +170,47 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
         onImageClassified(image, classification)
       }
 
-      // Create organized folder structure
-      const folderName = `filtered_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`
-
-      // Create ZIP file with organized structure
+      // Create a single ZIP file with two folders: normal and theft
       const JSZip = (await import('jszip')).default
       const zip = new JSZip()
-
-      // Add normal images to normal folder (100% confidence)
       if (normalImages.length > 0) {
         const normalFolder = zip.folder('normal')
-        normalImages.forEach((image, index) => {
-          normalFolder?.file(`normal_${Date.now()}_${index}.jpg`, image)
+        normalImages.forEach((image) => {
+          // Find the processed image entry for this file to get confidence
+          const imgData = processedImages.find((item) => item.file === image)
+          const confidenceStr = imgData
+            ? Math.round(imgData.confidence * 100).toString()
+            : 'NA'
+          normalFolder?.file(`${confidenceStr}_${image.name}`, image)
         })
       }
-
-      // Add theft images to theft folder (100% confidence)
       if (theftImages.length > 0) {
         const theftFolder = zip.folder('theft')
-        theftImages.forEach((image, index) => {
-          theftFolder?.file(`theft_${Date.now()}_${index}.jpg`, image)
+        theftImages.forEach((image) => {
+          // Find the processed image entry for this file to get confidence
+          const imgData = processedImages.find((item) => item.file === image)
+          const confidenceStr = imgData
+            ? Math.round(imgData.confidence * 100).toString()
+            : 'NA'
+          theftFolder?.file(`${confidenceStr}_${image.name}`, image)
         })
       }
-
-      // Add unidentified images to unidentified folder (< 100% confidence)
-      if (unidentifiedImages.length > 0) {
-        const unidentifiedFolder = zip.folder('unidentified')
-        unidentifiedImages.forEach((image, index) => {
-          unidentifiedFolder?.file(
-            `unidentified_${Date.now()}_${index}.jpg`,
-            image
-          )
-        })
-      }
-
-      // Generate and download ZIP file
+      // Format current date and time for ZIP file name
+      const now = new Date()
+      const pad = (n: number) => n.toString().padStart(2, '0')
+      let hours = now.getHours()
+      const minutes = pad(now.getMinutes())
+      const ampm = hours >= 12 ? 'PM' : 'AM'
+      hours = hours % 12
+      hours = hours ? hours : 12 // the hour '0' should be '12'
+      const day = pad(now.getDate())
+      const month = pad(now.getMonth() + 1)
+      const year = now.getFullYear()
+      const zipFileName = `${day}-${month}-${year}_${hours}:${minutes}${ampm}.zip`
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(zipBlob)
-      link.download = `${folderName}.zip`
+      link.download = zipFileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -225,7 +220,7 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
       setBatchImages([])
 
       alert(
-        `Batch processing complete!\nNormal images (100% confidence): ${normalImages.length}\nTheft images (100% confidence): ${theftImages.length}\nUnidentified images (< 100% confidence): ${unidentifiedImages.length}\nDownloaded as: ${folderName}.zip`
+        `Batch processing complete!\nNormal images: ${normalImages.length}\nTheft images: ${theftImages.length}\nDownloaded as: ${zipFileName} (with normal/ and theft/ folders)`
       )
     } catch (error) {
       console.error('Error processing batch images:', error)
@@ -258,17 +253,12 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
   // Get classification statistics
   const getClassificationStats = () => {
     const normalCount = classifiedImages.filter(
-      (item) =>
-        item.classification.toLowerCase() === 'normal' && item.confidence >= 1.0
+      (item) => item.classification.toLowerCase() === 'normal'
     ).length
     const theftCount = classifiedImages.filter(
-      (item) =>
-        item.classification.toLowerCase() === 'theft' && item.confidence >= 1.0
+      (item) => item.classification.toLowerCase() === 'theft'
     ).length
-    const unidentifiedCount = classifiedImages.filter(
-      (item) => item.confidence < 1.0
-    ).length
-    return { normalCount, theftCount, unidentifiedCount }
+    return { normalCount, theftCount }
   }
 
   const stats = getClassificationStats()
@@ -357,26 +347,18 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
               <h3 className="text-lg font-semibold mb-3 text-blue-800">
                 Classification Statistics
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-green-100 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
                     {stats.normalCount}
                   </div>
-                  <div className="text-sm text-green-800">Normal (100%)</div>
+                  <div className="text-sm text-green-800">Normal</div>
                 </div>
                 <div className="text-center p-3 bg-red-100 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">
                     {stats.theftCount}
                   </div>
-                  <div className="text-sm text-red-800">Theft (100%)</div>
-                </div>
-                <div className="text-center p-3 bg-yellow-100 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {stats.unidentifiedCount}
-                  </div>
-                  <div className="text-sm text-yellow-800">
-                    Unidentified (&lt;100%)
-                  </div>
+                  <div className="text-sm text-red-800">Theft</div>
                 </div>
               </div>
             </div>
@@ -400,13 +382,10 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
               ))}
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              Images will be automatically organized into three folders:
-              <br />• <strong>normal</strong> - Images with 100% confidence as
-              normal
-              <br />• <strong>theft</strong> - Images with 100% confidence as
-              theft
-              <br />• <strong>unidentified</strong> - Images with less than 100%
-              confidence
+              Images will be automatically organized into two folders inside a
+              single ZIP file:
+              <br />• <strong>normal/</strong> - Images classified as normal
+              <br />• <strong>theft/</strong> - Images classified as theft
             </p>
           </div>
 
@@ -580,11 +559,11 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
                   <div
                     key={index}
                     className={`p-3 rounded-lg border ${
-                      item.confidence >= 1.0
-                        ? item.classification.toLowerCase() === 'normal'
-                          ? 'bg-green-50 border-green-200'
-                          : 'bg-red-50 border-red-200'
-                        : 'bg-yellow-50 border-yellow-200'
+                      item.classification.toLowerCase() === 'normal'
+                        ? 'bg-green-50 border-green-200'
+                        : item.classification.toLowerCase() === 'theft'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-yellow-50 border-yellow-200'
                     }`}
                   >
                     <div className="text-sm text-gray-600">
@@ -592,15 +571,14 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
                     </div>
                     <div
                       className={`font-semibold ${
-                        item.confidence >= 1.0
-                          ? item.classification.toLowerCase() === 'normal'
-                            ? 'text-green-600'
-                            : 'text-red-600'
-                          : 'text-yellow-600'
+                        item.classification.toLowerCase() === 'normal'
+                          ? 'text-green-600'
+                          : item.classification.toLowerCase() === 'theft'
+                            ? 'text-red-600'
+                            : 'text-yellow-600'
                       }`}
                     >
-                      {item.classification} ({Math.round(item.confidence * 100)}
-                      %)
+                      {item.classification}
                     </div>
                     <div className="text-xs text-gray-500">
                       {item.file.name}
@@ -621,16 +599,15 @@ const ImageClassifier: React.FC<ImageClassifierProps> = ({
                 click "Process Images" to classify and organize them
               </li>
               <li>
-                Batch processing creates a ZIP file with organized folders:
-                filtered_[timestamp]/normal/, filtered_[timestamp]/theft/, and
-                filtered_[timestamp]/unidentified/
+                Batch processing creates a single ZIP file:
+                <br />• <strong>classified_images.zip</strong> - Contains{' '}
+                <strong>normal/</strong> and <strong>theft/</strong> folders
+                with respective images
               </li>
               <li>
-                Images are automatically sorted based on confidence:
-                <br />• <strong>100% confidence</strong> → normal or theft
-                folders
-                <br />• <strong>&lt;100% confidence</strong> → unidentified
-                folder
+                Images are automatically sorted based on classification:
+                <br />• <strong>normal</strong> → normal/
+                <br />• <strong>theft</strong> → theft/
               </li>
             </ol>
           </div>

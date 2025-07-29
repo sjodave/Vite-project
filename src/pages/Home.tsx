@@ -142,10 +142,11 @@ export default function Home() {
             </h3>
             <p className="text-gray-600">
               Upload multiple images at once. The system will classify each
-              image and create a ZIP file with organized folders:{' '}
-              <code>filtered_[timestamp]/normal/</code>,{' '}
-              <code>filtered_[timestamp]/theft/</code>, and{' '}
-              <code>filtered_[timestamp]/unidentified/</code>
+              image and create a single ZIP file:
+              <br />
+              <code>classified_images.zip</code> (contains{' '}
+              <strong>normal/</strong> and <strong>theft/</strong> folders with
+              respective images).
             </p>
           </div>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
